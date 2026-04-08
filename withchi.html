@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin | Withdrawals</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+<style>
+body{background:#f1f5f9;font-family:Inter}
+.card{background:#fff;margin:20px;padding:18px;border-radius:14px}
+button{padding:10px;border:none;border-radius:8px;font-weight:600}
+.approve{background:#16a34a;color:#fff}
+.reject{background:#dc2626;color:#fff}
+</style>
+</head>
+<body>
+
+<h2 style="margin:20px">Withdrawal Requests</h2>
+<div id="box"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const app=initializeApp({
+ apiKey:"AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+ authDomain:"estateearn-1b31c.firebaseapp.com",
+ projectId:"estateearn-1b31c"
+});
+
+const db=getFirestore(app);
+const box=document.getElementById("box");
+
+async function load(){
+ const snap=await getDocs(collection(db,"withdrawals"));
+ box.innerHTML="";
+ snap.forEach(d=>{
+  const w=d.data();
+  if(w.status!=="pending") return;
+  box.innerHTML+=`
+   <div class="card">
+    <p>User: ${w.uid}</p>
+    <p>Amount: ₦${w.amount}</p>
+    <button class="approve" onclick="update('${d.id}','approved')">Approve</button>
+    <button class="reject" onclick="update('${d.id}','rejected')">Reject</button>
+   </div>
+  `;
+ });
+}
+
+window.update=async(id,status)=>{
+ await updateDoc(doc(db,"withdrawals",id),{status});
+ load();
+};
+
+load();
+</script>
+</body>
+</html>

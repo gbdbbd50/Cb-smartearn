@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SmartEstate | Admin Deposit Approval</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+
+<style>
+:root{
+  --primary:#0f766e;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --success:#16a34a;
+  --danger:#dc2626;
+}
+*{box-sizing:border-box;font-family:Inter}
+body{margin:0;background:var(--bg);color:var(--text)}
+header{
+  background:#fff;padding:16px 24px;display:flex;
+  justify-content:space-between;align-items:center;
+  box-shadow:0 6px 20px rgba(0,0,0,.05)
+}
+.logo{font-size:22px;font-weight:700;color:var(--primary)}
+a{color:var(--primary);font-weight:600;text-decoration:none}
+main{max-width:1100px;margin:auto;padding:28px}
+.card{
+  background:var(--card);padding:20px;border-radius:16px;
+  box-shadow:0 20px 45px rgba(0,0,0,.08);margin-bottom:20px
+}
+.deposit{display:grid;grid-template-columns:280px 1fr;gap:20px}
+.deposit img{
+  width:100%;border-radius:12px;cursor:pointer;
+  border:1px solid #e5e7eb
+}
+.meta p{font-size:14px;margin:6px 0;color:var(--muted)}
+.actions{display:flex;gap:12px;margin-top:16px}
+button{
+  padding:12px 18px;border:none;border-radius:10px;
+  font-weight:600;cursor:pointer
+}
+.approve{background:var(--primary);color:#fff}
+.reject{background:#fee2e2;color:#991b1b}
+.loading{text-align:center;color:var(--muted);padding:40px}
+.toast{
+  position:fixed;bottom:20px;right:20px;
+  padding:14px 18px;border-radius:8px;
+  color:#fff;opacity:0;transform:translateY(20px);
+  transition:.3s
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{background:var(--success)}
+.toast.error{background:var(--danger)}
+#imageModal{
+  position:fixed;inset:0;display:none;
+  background:rgba(0,0,0,.75);
+  justify-content:center;align-items:center;z-index:9999
+}
+#imageModal img{max-width:90%;max-height:90%;border-radius:12px}
+#imageModal button{
+  position:absolute;top:20px;right:20px;
+  width:42px;height:42px;border-radius:50%;
+  background:var(--danger);color:#fff;font-size:20px
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">SmartEstate Admin</div>
+  <a href="admin-dashboard.html">← Dashboard</a>
+</header>
+
+<main>
+  <h1>Pending Deposits</h1>
+  <div id="container" class="loading">Loading deposits...</div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<div id="imageModal">
+  <button onclick="closeModal()">×</button>
+  <img id="modalImg">
+</div>
+
+<script type="module">
+/* ================= EMAILJS ================= */
+emailjs.init("YOUR_EMAILJS_PUBLIC_KEY");
+
+/* ================= FIREBASE ================= */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collection, query, where, getDocs,
+  doc, getDoc, updateDoc, increment, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+  authDomain: "estateearn-1b31c.firebaseapp.com",
+  projectId: "estateearn-1b31c"
+});
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+const container = document.getElementById("container");
+
+/* ================= UTIL ================= */
+const toast = (msg,type)=>{
+  const t=document.getElementById("toast");
+  t.textContent=msg;
+  t.className=`toast ${type} show`;
+  setTimeout(()=>t.classList.remove("show"),3000);
+};
+
+/* ================= LOAD DEPOSITS ================= */
+async function loadDeposits(){
+  try{
+    container.innerHTML="<p class='loading'>Loading deposits...</p>";
+
+    const q = query(
+      collection(db,"deposits"),
+      where("status","==","pending")
+    );
+
+    const snap = await getDocs(q);
+
+    if(snap.empty){
+      container.innerHTML="<p class='loading'>No pending deposits</p>";
+      return;
+    }
+
+    container.innerHTML="";
+    snap.forEach(d=>{
+      const dep=d.data();
+      const amount=Number(dep.amount||0);
+      const bonus=Number(dep.bonus||0);
+      const total=amount+bonus;
+
+      const card=document.createElement("div");
+      card.className="card";
+      card.innerHTML=`
+        <div class="deposit">
+          <img src="${dep.proof}" onclick="openModal('${dep.proof}')">
+          <div class="meta">
+            <p><strong>User ID:</strong> ${dep.uid}</p>
+            <p><strong>Sender:</strong> ${dep.senderName}</p>
+            <p><strong>Amount:</strong> ₦${amount.toLocaleString()}</p>
+            <p><strong>Bonus:</strong> ₦${bonus.toLocaleString()}</p>
+            <p><strong>Total Credit:</strong> ₦${total.toLocaleString()}</p>
+            <div class="actions">
+              <button class="approve"
+                onclick="approveDeposit('${d.id}','${dep.uid}',${total})">
+                Approve
+              </button>
+              <button class="reject"
+                onclick="rejectDeposit('${d.id}')">
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>`;
+      container.appendChild(card);
+    });
+  }catch(e){
+    console.error(e);
+    toast("Failed to load deposits","error");
+  }
+}
+
+/* ================= ACTIONS ================= */
+window.approveDeposit=async(id,uid,total)=>{
+  try{
+    await updateDoc(doc(db,"users",uid),{
+      balance:increment(total),
+      depositCount:increment(1)
+    });
+
+    await updateDoc(doc(db,"deposits",id),{
+      status:"approved",
+      approvedAt:serverTimestamp()
+    });
+
+    toast("Deposit approved","success");
+    loadDeposits();
+  }catch(e){
+    toast(e.message,"error");
+  }
+};
+
+window.rejectDeposit=async(id)=>{
+  await updateDoc(doc(db,"deposits",id),{
+    status:"rejected",
+    rejectedAt:serverTimestamp()
+  });
+  toast("Deposit rejected","success");
+  loadDeposits();
+};
+
+/* ================= MODAL ================= */
+window.openModal=src=>{
+  modalImg.src=src;
+  imageModal.style.display="flex";
+};
+window.closeModal=()=>imageModal.style.display="none";
+
+/* ================= AUTH GUARD ================= */
+onAuthStateChanged(auth, async user=>{
+  if(!user){
+    location.href="login.html";
+    return;
+  }
+
+  const snap = await getDoc(doc(db,"users",user.uid));
+  if(!snap.exists() || snap.data().model !== "admin"){
+    location.href="dashboard.html";
+    return;
+  }
+
+  loadDeposits();
+});
+</script>
+
+</body>
+</html>

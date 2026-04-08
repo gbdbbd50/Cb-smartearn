@@ -1,0 +1,278 @@
+<!DOCTYPE html>  
+<html lang="en">  
+<head>  
+  <meta charset="UTF-8">  
+  <title>Cb smartearn</title>  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">  
+  
+  <style>  
+    :root {  
+      --primary:#0f766e;  
+      --bg:#f8fafc;  
+      --card:#ffffff;  
+      --text:#0f172a;  
+      --muted:#64748b;  
+      --success:#16a34a;  
+      --error:#dc2626;  
+    }  
+  
+    *{box-sizing:border-box;font-family:Inter,sans-serif}  
+  
+    body{  
+      margin:0;  
+      background:var(--bg);  
+      min-height:100vh;  
+      display:flex;  
+      align-items:center;  
+      justify-content:center;  
+    }  
+  
+    .card{  
+      width:100%;  
+      max-width:440px;  
+      background:var(--card);  
+      border-radius:14px;  
+      padding:36px;  
+      box-shadow:0 20px 45px rgba(0,0,0,.08);  
+    }  
+  
+    .logo{  
+      text-align:center;  
+      font-weight:700;  
+      font-size:22px;  
+      color:var(--primary);  
+    }  
+  
+    h1{  
+      text-align:center;  
+      margin:14px 0 6px;  
+      font-size:26px;  
+      color:var(--text);  
+    }  
+  
+    p{  
+      text-align:center;  
+      color:var(--muted);  
+      font-size:14px;  
+      margin-bottom:26px;  
+    }  
+  
+    label{  
+      font-size:13px;  
+      font-weight:600;  
+      display:block;  
+      margin-bottom:6px;  
+    }  
+  
+    input{  
+      width:100%;  
+      padding:12px 14px;  
+      border-radius:8px;  
+      border:1px solid #e2e8f0;  
+      margin-bottom:18px;  
+      font-size:14px;  
+    }  
+  
+    button{  
+      width:100%;  
+      padding:14px;  
+      background:var(--primary);  
+      color:#fff;  
+      border:none;  
+      border-radius:8px;  
+      font-weight:600;  
+      cursor:pointer;  
+      display:flex;  
+      justify-content:center;  
+      align-items:center;  
+      gap:10px;  
+    }  
+  
+    button:disabled{opacity:.7; cursor:not-allowed;}  
+
+    .spinner{
+      width:18px;
+      height:18px;
+      border:3px solid rgba(255,255,255,.3);
+      border-top:3px solid #fff;
+      border-radius:50%;
+      animation:spin 1s linear infinite;
+      display:none;
+    }
+
+    @keyframes spin{
+      to{transform:rotate(360deg)}
+    }
+
+    .toast{  
+      position:fixed;  
+      bottom:20px;  
+      right:20px;  
+      padding:14px 18px;  
+      border-radius:8px;  
+      color:#fff;  
+      opacity:0;  
+      transition:.3s;  
+    }  
+  
+    .toast.show{opacity:1}  
+    .toast.success{background:var(--success)}  
+    .toast.error{background:var(--error)}  
+  </style>  
+</head>  
+  
+<body>  
+  
+<div class="card">  
+  <div class="logo">CB SMARTEARN</div>  
+  <h1>Create Account</h1>  
+  <p>Start building wealth with Cb SmartEarn</p>  
+  
+  <form id="registerForm">  
+    <label>Full Name</label>  
+    <input id="fullName" required>  
+  
+    <label>Username</label>  
+    <input id="username" required>  
+  
+    <label>Email</label>  
+    <input type="email" id="email" required>  
+  
+    <label>Password</label>  
+    <input type="password" id="password" required>  
+  
+    <label>Referral Username (optional)</label>  
+    <input id="referral">  
+  
+    <button type="submit">
+      <span id="btnText">Create Account</span>
+      <div class="spinner" id="spinner"></div>
+    </button>
+  </form>  
+
+  <div class="link">  
+    Already registered? <a href="login.html">Login</a>  
+  </div>   
+  
+    Forgot password? <a href="reset.html">Reset</a>  
+  </div>  
+</div>  
+    
+<div id="toast" class="toast"></div>  
+  
+<script type="module">  
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";  
+  import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";  
+  import {  
+    getFirestore, collection, query, where, getDocs,  
+    doc, setDoc, updateDoc, increment  
+  } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";  
+  
+  const firebaseConfig = {  
+    apiKey: "AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",  
+    authDomain: "estateearn-1b31c.firebaseapp.com",  
+    projectId: "estateearn-1b31c"  
+  };  
+  
+  const app = initializeApp(firebaseConfig);  
+  const auth = getAuth(app);  
+  const db = getFirestore(app);  
+  
+  const toast = document.getElementById("toast");  
+  const spinner = document.getElementById("spinner");
+  const btnText = document.getElementById("btnText");
+  const submitBtn = document.querySelector("#registerForm button");
+
+  function showToast(msg, type){  
+    toast.textContent = msg;  
+    toast.className = `toast ${type} show`;  
+    setTimeout(()=>toast.classList.remove("show"),3000);  
+  }
+
+  function setLoading(state){
+    submitBtn.disabled = state;
+    spinner.style.display = state ? "block" : "none";
+    btnText.textContent = state ? "Creating..." : "Create Account";
+  }
+  
+  document.getElementById("registerForm").addEventListener("submit", async e => {  
+    e.preventDefault();  
+    setLoading(true);
+
+    try {  
+      const fullName = document.getElementById("fullName").value.trim();  
+      const username = document.getElementById("username").value.trim().toLowerCase();  
+      const email = document.getElementById("email").value.trim();  
+      const password = document.getElementById("password").value;  
+      const referralUsername = document.getElementById("referral").value.trim().toLowerCase();  
+
+      // Username check  
+      const nameSnap = await getDocs(query(  
+        collection(db,"users"),  
+        where("username","==",username)  
+      ));  
+  
+      if(!nameSnap.empty){  
+        showToast("Username already taken","error");  
+        setLoading(false);
+        return;  
+      }  
+  
+      // Referral lookup  
+      let inviterDoc = null;  
+      if(referralUsername){  
+        const refSnap = await getDocs(query(  
+          collection(db,"users"),  
+          where("username","==",referralUsername)  
+        ));  
+  
+        if(refSnap.empty){  
+          showToast("Invalid referral code","error");  
+          setLoading(false);
+          return;  
+        }  
+  
+        inviterDoc = refSnap.docs[0];  
+      }  
+  
+      // Create auth user  
+      const cred = await createUserWithEmailAndPassword(auth,email,password);  
+  
+      // Create user profile  
+      await setDoc(doc(db,"users",cred.user.uid),{  
+        uid: cred.user.uid,  
+        name: fullName,  
+        username,  
+        email,  
+        balance: 0,  
+        depositcount: 0,  
+        investmentcount: 0,  
+        model: "investor",  
+        referral: referralUsername || null,  
+        referralCount: 0,  
+        createdAt: new Date()  
+      });  
+  
+      // Increment referral count (MATCHES RULES)  
+      if(inviterDoc){  
+        await updateDoc(inviterDoc.ref,{  
+          referralCount: increment(1)  
+        });  
+      }  
+  
+      showToast("Account created successfully","success");  
+      setTimeout(()=>location.href="login.html",1500);  
+
+    } catch(err){  
+      showToast(err.message,"error");  
+      setLoading(false);
+    } finally {
+      setLoading(false);
+    }
+  });  
+</script>  
+  
+</body>  
+</html>

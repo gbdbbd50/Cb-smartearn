@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin | Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{font-family:Inter;background:#f1f5f9}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin:20px}
+.card{background:#fff;padding:20px;border-radius:14px}
+</style>
+</head>
+<body>
+
+<h2 style="margin:20px">Platform Analytics</h2>
+<div class="grid">
+ <div class="card"><canvas id="users"></canvas></div>
+ <div class="card"><canvas id="funds"></canvas></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const app=initializeApp({
+ apiKey:"AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+ authDomain:"estateearn-1b31c.firebaseapp.com",
+ projectId:"estateearn-1b31c"
+});
+
+const db=getFirestore(app);
+
+const users=(await getDocs(collection(db,"users"))).size;
+const investors=(await getDocs(collection(db,"investments"))).size;
+const deposits=(await getDocs(collection(db,"deposits"))).size;
+const withdrawals=(await getDocs(collection(db,"withdrawals"))).size;
+
+new Chart(document.getElementById("users"),{
+ type:"bar",
+ data:{labels:["Users","Investors"],datasets:[{data:[users,investors]}]}
+});
+
+new Chart(document.getElementById("funds"),{
+ type:"pie",
+ data:{labels:["Deposits","Withdrawals"],datasets:[{data:[deposits,withdrawals]}]}
+});
+</script>
+</body>
+</html>

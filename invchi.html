@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin | Investments</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f1f5f9;font-family:Inter}
+header{background:#fff;padding:16px 24px;display:flex;justify-content:space-between}
+.card{background:#fff;padding:18px;border-radius:14px;margin:20px;box-shadow:0 10px 30px rgba(0,0,0,.06)}
+button{padding:8px 12px;border:none;border-radius:8px;font-weight:600;cursor:pointer}
+.pause{background:#fde68a}
+.resume{background:#bbf7d0}
+.stop{background:#fecaca}
+</style>
+</head>
+<body>
+
+<header>
+<h2>Investment Management</h2>
+<a href="admin-dashboard.html">← Dashboard</a>
+</header>
+
+<div id="list"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const app=initializeApp({
+ apiKey:"AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+ authDomain:"estateearn-1b31c.firebaseapp.com",
+ projectId:"estateearn-1b31c"
+});
+
+const auth=getAuth(app);
+const db=getFirestore(app);
+const list=document.getElementById("list");
+
+async function load(){
+ const snap=await getDocs(collection(db,"investments"));
+ list.innerHTML="";
+ snap.forEach(d=>{
+  const i=d.data();
+  const div=document.createElement("div");
+  div.className="card";
+  div.innerHTML=`
+   <p><b>User:</b> ${i.uid}</p>
+  <p><b>email:</b>${u.email}</p>
+   <p><b>Plan:</b> ${i.plan}</p>
+   <p><b>Status:</b> ${i.status}</p>
+   <button class="pause" onclick="set('${d.id}','paused')">Pause</button>
+   <button class="resume" onclick="set('${d.id}','active')">Resume</button>
+   <button class="stop" onclick="set('${d.id}','terminated')">Terminate</button>
+  `;
+  list.appendChild(div);
+ });
+}
+
+window.set=async(id,status)=>{
+ await updateDoc(doc(db,"investments",id),{status});
+ load();
+};
+
+onAuthStateChanged(auth,async u=>{
+ if(!u) location.href="login.html";
+ const s=await getDoc(doc(db,"users",u.uid));
+ if(s.data().model!=="admin") location.href="dashboard.html";
+ load();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cb SmartEarn | Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">  <style>
+    :root{
+      --primary:#0f766e;
+      --secondary:#134e4a;
+      --bg:#f8fafc;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --success:#16a34a;
+      --error:#dc2626;
+    }
+
+    *{box-sizing:border-box;font-family:Inter,sans-serif}
+
+    body{
+      margin:0;
+      background:var(--bg);
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .card{
+      width:100%;
+      max-width:420px;
+      background:var(--card);
+      border-radius:14px;
+      padding:36px;
+      box-shadow:0 20px 45px rgba(0,0,0,.08);
+    }
+
+    .logo{
+      text-align:center;
+      margin-bottom:14px;
+      font-weight:700;
+      font-size:22px;
+      color:var(--primary);
+    }
+
+    h1{
+      text-align:center;
+      margin:10px 0 6px;
+      font-size:26px;
+      font-weight:700;
+      color:var(--text);
+    }
+
+    p{
+      text-align:center;
+      color:var(--muted);
+      font-size:14px;
+      margin-bottom:26px;
+    }
+
+    label{
+      font-size:13px;
+      font-weight:600;
+      color:var(--text);
+      display:block;
+      margin-bottom:6px;
+    }
+
+    input{
+      width:100%;
+      padding:12px 14px;
+      border-radius:8px;
+      border:1px solid #e2e8f0;
+      margin-bottom:18px;
+      font-size:14px;
+    }
+
+    input:focus{
+      outline:none;
+      border-color:var(--primary);
+    }
+
+    button{
+      width:100%;
+      padding:14px;
+      background:var(--primary);
+      color:#fff;
+      border:none;
+      border-radius:8px;
+      font-weight:600;
+      font-size:15px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+    }
+
+    button:disabled{
+      opacity:.7;
+      cursor:not-allowed;
+    }
+
+    .spinner{
+      width:18px;
+      height:18px;
+      border:3px solid rgba(255,255,255,.3);
+      border-top:3px solid #fff;
+      border-radius:50%;
+      animation:spin 1s linear infinite;
+      display:none;
+    }
+
+    @keyframes spin{
+      to{transform:rotate(360deg)}
+    }
+
+    .link{
+      text-align:center;
+      margin-top:18px;
+      font-size:14px;
+    }
+
+    .link a{
+      color:var(--primary);
+      font-weight:600;
+      text-decoration:none;
+    }
+
+    .toast{
+      position:fixed;
+      bottom:20px;
+      right:20px;
+      min-width:260px;
+      padding:14px 18px;
+      border-radius:8px;
+      color:#fff;
+      font-size:14px;
+      font-weight:500;
+      opacity:0;
+      transform:translateY(20px);
+      transition:.3s;
+      z-index:999;
+    }
+
+    .toast.show{opacity:1;transform:translateY(0)}
+    .toast.success{background:var(--success)}
+    .toast.error{background:var(--error)}
+  </style></head><body><div class="card">
+  <div class="logo">Cb SmartEarn</div>  <h1>Welcome Back</h1>
+  <p>Login to continue investing with Cb SmartEarn</p>  <form id="loginForm">
+    <label>Email Address</label>
+    <input type="email" id="email" required><label>Password</label>
+<input type="password" id="password" required>
+
+<button type="submit" id="loginBtn">
+  <span id="btnText">Login</span>
+  <div class="spinner" id="spinner"></div>
+</button>
+
+  </form>  <div class="link">
+    Don’t have an account?
+    <a href="index.html">Create Account</a>
+   Forgot your password? <a href="reset.html">Reset</a>
+  </div>
+</div><div id="toast" class="toast"></div><script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+    authDomain: "estateearn-1b31c.firebaseapp.com",
+    projectId: "estateearn-1b31c",
+    storageBucket: "estateearn-1b31c.firebasestorage.app",
+    messagingSenderId: "829960797683",
+    appId: "1:829960797683:web:2fa2f99ada0c724160e686",
+    measurementId: "G-4NCSDHDF85"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const toast = document.getElementById("toast");
+  const spinner = document.getElementById("spinner");
+  const btnText = document.getElementById("btnText");
+  const loginBtn = document.getElementById("loginBtn");
+
+  function showToast(msg,type){
+    toast.textContent = msg;
+    toast.className = `toast ${type} show`;
+    setTimeout(()=>toast.classList.remove("show"),3000);
+  }
+
+  function setLoading(state){
+    loginBtn.disabled = state;
+    spinner.style.display = state ? "block" : "none";
+    btnText.textContent = state ? "Signing in..." : "Login";
+  }
+
+  document.getElementById("loginForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    setLoading(true);
+
+    try{
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+
+      const userSnap = await getDoc(doc(db, "users", cred.user.uid));
+      if(!userSnap.exists()){
+        throw new Error("User profile not found");
+      }
+
+      const userData = userSnap.data();
+
+      // Save user locally
+      localStorage.setItem("smartestateUser", JSON.stringify(userData));
+
+      showToast("Login successful", "success");
+
+      // ✅ ROLE-BASED REDIRECT
+      setTimeout(() => {
+        if (userData.model === "admin") {
+          window.location.href = "chisom.html";
+        } else {
+          window.location.href = "dashboard.html";
+        }
+      }, 1200);
+
+    }catch(err){
+      showToast(err.message, "error");
+      setLoading(false);
+    }
+  });
+</script></body>
+</html>

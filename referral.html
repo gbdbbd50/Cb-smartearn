@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SmartEstate | Referral</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --primary:#0f766e;
+  --secondary:#134e4a;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --success:#16a34a;
+  --error:#dc2626;
+}
+
+*{box-sizing:border-box;font-family:Inter,sans-serif}
+body{margin:0;background:var(--bg)}
+
+header{
+  background:#fff;
+  padding:16px 24px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.05)
+}
+
+.logo{font-size:22px;font-weight:700;color:var(--primary)}
+a.back{text-decoration:none;color:var(--primary);font-weight:600}
+
+main{max-width:900px;margin:auto;padding:28px}
+
+h1{text-align:center;margin-bottom:12px}
+
+.referral-card{
+  background:var(--card);
+  padding:22px;
+  border-radius:14px;
+  box-shadow:0 16px 40px rgba(0,0,0,.06);
+  margin-bottom:24px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.referral-card input{
+  padding:12px;
+  border-radius:8px;
+  border:1px solid #e2e8f0;
+  font-size:14px;
+}
+
+.referral-card button{
+  width:160px;
+  padding:12px;
+  border:none;
+  border-radius:8px;
+  background:var(--primary);
+  color:#fff;
+  font-weight:600;
+  cursor:pointer;
+}
+
+.loader{
+  display:flex;
+  justify-content:center;
+  margin-top:8px;
+}
+
+.spinner{
+  width:26px;
+  height:26px;
+  border:3px solid #cbd5f5;
+  border-top:3px solid var(--primary);
+  border-radius:50%;
+  animation:spin 1s linear infinite;
+}
+
+@keyframes spin{
+  100%{transform:rotate(360deg)}
+}
+
+.referral-stats{
+  display:flex;
+  justify-content:space-between;
+  background:var(--card);
+  padding:16px;
+  border-radius:14px;
+  box-shadow:0 14px 35px rgba(0,0,0,.06);
+  margin-bottom:24px;
+  font-weight:600;
+}
+
+.referral-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.referral-item{
+  background:var(--card);
+  padding:14px 18px;
+  border-radius:12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  box-shadow:0 8px 20px rgba(0,0,0,.05);
+  cursor:pointer;
+  transition:.2s;
+}
+.referral-item:hover{transform:scale(1.02)}
+
+.badge{
+  padding:4px 10px;
+  border-radius:12px;
+  font-size:12px;
+  font-weight:600;
+}
+.valid{background:#dcfce7;color:#166534}
+.invalid{background:#fee2e2;color:#991b1b}
+
+.modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.4);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:999;
+}
+
+.modal-content{
+  background:#fff;
+  padding:26px;
+  border-radius:14px;
+  width:100%;
+  max-width:420px;
+}
+
+.actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:20px;
+}
+
+.actions button{
+  padding:10px 16px;
+  border-radius:8px;
+  border:none;
+  font-weight:600;
+  cursor:pointer;
+}
+.cancel{background:#e5e7eb}
+
+.toast{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  padding:14px 18px;
+  border-radius:8px;
+  color:#fff;
+  opacity:0;
+  transform:translateY(20px);
+  transition:.3s;
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{background:var(--success)}
+.toast.error{background:var(--error)}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">SmartEstate</div>
+  <a href="dashboard.html" class="back">← Dashboard</a>
+</header>
+
+<main>
+<h1>Referral Program</h1>
+
+<div class="referral-card">
+  <label>Your Referral Link</label>
+  <input id="referralInput" readonly>
+  <button id="copyBtn">Copy Link</button>
+  <div class="loader" id="loading"><div class="spinner"></div></div>
+</div>
+
+<div class="referral-stats">
+  <div>Referrals: <span id="referrals">0</span></div>
+  <div>Valid: <span id="validCount">0</span></div>
+</div>
+
+<div class="referral-list" id="referralList"></div>
+</main>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h3>Referral Details</h3>
+    <div id="modalBody"></div>
+    <div class="actions">
+      <button class="cancel" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+  authDomain: "estateearn-1b31c.firebaseapp.com",
+  projectId: "estateearn-1b31c"
+});
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+window.closeModal = () => document.getElementById("modal").style.display="none";
+
+function openModal(html){
+  document.getElementById("modalBody").innerHTML = html;
+  document.getElementById("modal").style.display="flex";
+}
+
+function toast(msg,type){
+  const t=document.getElementById("toast");
+  t.textContent=msg;
+  t.className=`toast ${type} show`;
+  setTimeout(()=>t.classList.remove("show"),3000);
+}
+
+document.getElementById("copyBtn").onclick=()=>{
+  navigator.clipboard.writeText(referralInput.value);
+  toast("Referral link copied","success");
+};
+
+onAuthStateChanged(auth, async user=>{
+  if(!user) return location.href="login.html";
+
+  const userSnap = await getDocs(query(collection(db,"users"),where("uid","==",user.uid)));
+  const me = userSnap.docs[0].data();
+
+  referralInput.value = window.location.origin + "/?ref=" + me.username;
+
+  const refs = await getDocs(query(collection(db,"users"),where("referral","==",me.username)));
+
+  let valid=0;
+  document.getElementById("loading").style.display="none";
+
+  refs.forEach(doc=>{
+    const u=doc.data();
+    const isValid = (u.depositCount || 0) >= 1;
+    if(isValid) valid++;
+
+    const joined = new Date(u.createdAt?.seconds*1000 || Date.now());
+    const div=document.createElement("div");
+    div.className="referral-item";
+    div.innerHTML=`
+      <span>${u.username}</span>
+      <span class="badge ${isValid?"valid":"invalid"}">
+        ${isValid?"Valid":"Pending"}
+      </span>`;
+    div.onclick=()=>openModal(`
+      <p><b>Username:</b> ${u.username}</p>
+      <p><b>Joined:</b> ${joined.toLocaleString()}</p>
+      <p><b>Deposits:</b> ${u.depositCount||0}</p>
+      <p><b>Reward:</b> ${isValid?"10% earned":"Not eligible"}</p>
+    `);
+    referralList.appendChild(div);
+  });
+
+  referrals.textContent = refs.size;
+  validCount.textContent = valid;
+});
+</script>
+
+</body>
+</html>

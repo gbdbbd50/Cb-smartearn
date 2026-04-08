@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SmartEstate | Manual Payment</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --primary:#0f766e;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --success:#16a34a;
+  --danger:#dc2626;
+}
+
+*{box-sizing:border-box;font-family:Inter}
+body{margin:0;background:var(--bg)}
+
+.center{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.loader{
+  width:48px;
+  height:48px;
+  border:5px solid #e5e7eb;
+  border-top-color:var(--primary);
+  border-radius:50%;
+  animation:spin 1s linear infinite;
+}
+
+@keyframes spin{
+  to{transform:rotate(360deg)}
+}
+
+main{
+  max-width:500px;
+  margin:auto;
+  padding:28px;
+  display:none;
+}
+
+.card{
+  background:var(--card);
+  padding:24px;
+  border-radius:16px;
+  box-shadow:0 16px 40px rgba(0,0,0,.06);
+  margin-bottom:20px;
+}
+
+h2{margin-top:0}
+.detail{
+  margin-bottom:10px;
+  font-size:15px;
+}
+
+.copy{
+  cursor:pointer;
+  color:var(--primary);
+  font-weight:600;
+}
+
+button{
+  width:100%;
+  padding:14px;
+  border:none;
+  border-radius:12px;
+  background:var(--primary);
+  color:#fff;
+  font-size:16px;
+  font-weight:600;
+  cursor:pointer;
+  margin-top:10px;
+}
+
+button.secondary{
+  background:#e5e7eb;
+  color:#111;
+}
+
+.hidden{display:none}
+
+input{
+  width:100%;
+  padding:12px;
+  border-radius:10px;
+  border:1px solid #e5e7eb;
+  margin-bottom:12px;
+}
+
+.toast{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  padding:14px 18px;
+  border-radius:8px;
+  color:#fff;
+  opacity:0;
+  transition:.3s;
+}
+.toast.show{opacity:1}
+.toast.success{background:var(--success)}
+.toast.error{background:var(--danger)}
+</style>
+</head>
+
+<body>
+
+<div class="center" id="loading">
+  <div class="loader"></div>
+</div>
+
+<main id="content">
+
+<div class="card">
+  <h2>Manual Bank Transfer</h2>
+
+  <div class="detail"><b>Bank:</b> Opay</div>
+  <div class="detail">
+    <b>Account Number:</b> 
+    <span id="acc">9162141283</span>
+    <span class="copy" onclick="copyAcc()">📋</span>
+  </div>
+  <div class="detail"><b>Account Name:</b> Chisom Nnonyelu Favour</div>
+  <div class="detail"><b>Amount:</b> ₦<span id="amt"></span></div>
+
+  <button id="sentBtn">I've Sent It</button>
+
+  <button class="secondary" onclick="changeMethod()">Change Method</button>
+  <button class="secondary" onclick="cancelDeposit()">Cancel</button>
+</div>
+
+<div class="card hidden" id="proofCard">
+  <h3>Confirm Payment</h3>
+
+  <input id="sender" placeholder="Sender's Name">
+  <input type="file" id="proof" accept="image/*">
+
+  <button onclick="submitProof()">Submit Proof</button>
+</div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import {
+  getFirestore, collection, query, where,
+  getDocs, updateDoc, doc
+} from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const IMGBB_KEY = "fc4eaed5cbbb475d955c2c87db3b90eb";
+
+const app = initializeApp({
+  apiKey:"AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+  authDomain:"estateearn-1b31c.firebaseapp.com",
+  projectId:"estateearn-1b31c"
+});
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let depositRef = null;
+
+const toast=(m,t)=>{
+  const x=document.getElementById("toast");
+  x.textContent=m;
+  x.className=`toast ${t} show`;
+  setTimeout(()=>x.classList.remove("show"),3000);
+};
+
+window.copyAcc=()=>{
+  navigator.clipboard.writeText("9162141283");
+  toast("Account number copied","success");
+};
+
+onAuthStateChanged(auth, async user=>{
+  if(!user) return location.href="login.html";
+
+  const amt = localStorage.getItem("depositAmount");
+  if(!amt) return location.href="deposit.html";
+
+  document.getElementById("amt").textContent = Number(amt).toLocaleString();
+
+  const q = await getDocs(query(
+    collection(db,"deposits"),
+    where("uid","==",user.uid),
+    where("status","==","awaiting"),
+    where("method","==","manual")
+  ));
+
+  if(q.empty) return location.href="deposit.html";
+  depositRef = doc(db,"deposits",q.docs[0].id);
+
+  setTimeout(()=>{
+    document.getElementById("loading").style.display="none";
+    document.getElementById("content").style.display="block";
+  },1200);
+});
+
+document.getElementById("sentBtn").onclick=()=>{
+  document.getElementById("sentBtn").remove();
+  document.getElementById("proofCard").classList.remove("hidden");
+};
+
+async function uploadImage(file){
+  const form=new FormData();
+  form.append("image",file);
+  const res=await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`,{
+    method:"POST",body:form
+  });
+  const data=await res.json();
+  return data.data.url;
+}
+
+window.submitProof=async()=>{
+  const sender=document.getElementById("sender").value;
+  const file=document.getElementById("proof").files[0];
+  if(!sender||!file) return toast("Fill all fields","error");
+
+  const url=await uploadImage(file);
+
+  await updateDoc(depositRef,{
+    senderName:sender,
+    proof:url,
+    status:"pending"
+  });
+
+  toast("Payment submitted for verification","success");
+  setTimeout(()=>location.href="dashboard.html",1500);
+};
+
+window.changeMethod=async()=>{
+  await updateDoc(depositRef,{method:"other"});
+  location.href="deposit.html";
+};
+
+window.cancelDeposit=async()=>{
+  await updateDoc(depositRef,{status:"cancelled"});
+  location.href="deposit.html";
+};
+</script>
+
+</body>
+</html>

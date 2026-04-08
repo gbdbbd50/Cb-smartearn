@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SmartEstate | Admin Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --primary:#0f766e;
+  --secondary:#134e4a;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+}
+
+*{box-sizing:border-box;font-family:Inter,sans-serif}
+body{margin:0;background:var(--bg)}
+
+header{
+  background:#fff;
+  padding:16px 24px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.05)
+}
+.logo{font-size:22px;font-weight:700;color:var(--primary)}
+.admin-badge{
+  background:var(--primary);
+  color:#fff;
+  padding:6px 12px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:600;
+}
+
+main{max-width:1100px;margin:auto;padding:30px}
+
+h1{margin-bottom:8px}
+.subtitle{color:var(--muted);margin-bottom:24px}
+
+/* Loading overlay */
+.loader-overlay{
+  position:fixed;
+  inset:0;
+  background:#f8fafc;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  z-index:999;
+  gap:20px;
+}
+
+.spinner{
+  width:48px;
+  height:48px;
+  border:5px solid #e5e7eb;
+  border-top:5px solid var(--primary);
+  border-radius:50%;
+  animation:spin 1s linear infinite;
+}
+
+.pulse{
+  width:120px;
+  height:12px;
+  background:var(--primary);
+  border-radius:6px;
+  animation:pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes spin{
+  100%{transform:rotate(360deg)}
+}
+@keyframes pulse{
+  0%{opacity:.3}
+  50%{opacity:1}
+  100%{opacity:.3}
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:20px;
+}
+
+.stat-card{
+  background:var(--card);
+  padding:24px;
+  border-radius:16px;
+  box-shadow:0 16px 40px rgba(0,0,0,.06);
+}
+
+.stat-title{
+  font-size:14px;
+  color:var(--muted);
+  margin-bottom:6px;
+}
+
+.stat-value{
+  font-size:32px;
+  font-weight:700;
+  color:var(--text);
+}
+</style>
+</head>
+
+<body>
+
+<div class="loader-overlay" id="loader">
+  <!-- Simultaneous animations -->
+  <div class="spinner"></div>
+  <div class="pulse"></div>
+  <div style="color:#64748b;font-weight:600">Loading admin statistics…</div>
+</div>
+
+<header>
+  <div class="logo">SmartEstate</div>
+  <div class="admin-badge">ADMIN</div>
+</header>
+
+<main>
+  <h1>Admin Dashboard</h1>
+  <p class="subtitle">System overview and platform statistics</p>
+
+  <div class="grid">
+    <div class="stat-card">
+      <div class="stat-title">Total Users</div>
+      <div class="stat-value" id="totalUsers">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Total Investors</div>
+      <div class="stat-value" id="totalInvestors">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Total Admins</div>
+      <div class="stat-value" id="totalAdmins">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-title">Total Investment Plans</div>
+      <div class="stat-value" id="totalPlans">0</div>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+  authDomain: "estateearn-1b31c.firebaseapp.com",
+  projectId: "estateearn-1b31c"
+});
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+onAuthStateChanged(auth, async user=>{
+  if(!user) return location.href="login.html";
+
+  // Fetch logged in user
+  const usersSnap = await getDocs(collection(db,"users"));
+  let isAdmin=false;
+
+  usersSnap.forEach(doc=>{
+    const d=doc.data();
+    if(d.uid===user.uid && d.model==="admin") isAdmin=true;
+  });
+
+  if(!isAdmin){
+    alert("Access denied. Admins only.");
+    return location.href="dashboard.html";
+  }
+
+  // Stats
+  let totalUsers=0, totalInvestors=0, totalAdmins=0;
+
+  usersSnap.forEach(doc=>{
+    const d=doc.data();
+    totalUsers++;
+    if(d.model==="admin") totalAdmins++;
+    if((d.depositCount||0) > 0) totalInvestors++;
+  });
+
+  const investmentsSnap = await getDocs(collection(db,"investments"));
+
+  // Update UI
+  totalUsersEl.textContent = totalUsers;
+  totalAdminsEl.textContent = totalAdmins;
+  totalInvestorsEl.textContent = totalInvestors;
+  totalPlansEl.textContent = investmentsSnap.size;
+
+  // Hide loader
+  document.getElementById("loader").style.display="none";
+});
+
+const totalUsersEl = document.getElementById("totalUsers");
+const totalAdminsEl = document.getElementById("totalAdmins");
+const totalInvestorsEl = document.getElementById("totalInvestors");
+const totalPlansEl = document.getElementById("totalPlans");
+</script>
+
+</body>
+</html>

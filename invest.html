@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cb SmartEarn | Invest</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --primary:#0f766e;
+  --secondary:#134e4a;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --success:#16a34a;
+  --error:#dc2626;
+}
+*{box-sizing:border-box;font-family:Inter,sans-serif}
+body{margin:0;background:var(--bg)}
+header{
+  background:#fff;
+  padding:16px 24px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.05)
+}
+.logo{font-size:22px;font-weight:700;color:var(--primary)}
+a.back{text-decoration:none;color:var(--primary);font-weight:600}
+main{max-width:1100px;margin:auto;padding:28px}
+.balance{
+  background:var(--card);
+  padding:20px;
+  border-radius:14px;
+  box-shadow:0 14px 35px rgba(0,0,0,.06);
+  margin-bottom:28px
+}
+.balance span{font-size:14px;color:var(--muted)}
+.balance h2{margin:6px 0 0;font-size:28px}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:22px
+}
+.plan{
+  background:var(--card);
+  padding:22px;
+  border-radius:16px;
+  box-shadow:0 16px 40px rgba(0,0,0,.06);
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between
+}
+.plan h3{margin:0 0 8px}
+.plan p{font-size:14px;color:var(--muted);margin:4px 0}
+.price{font-size:22px;font-weight:700;margin:16px 0}
+.plan button{
+  padding:12px;
+  border:none;
+  border-radius:8px;
+  background:var(--primary);
+  color:#fff;
+  font-weight:600;
+  cursor:pointer
+}
+.modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.4);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:999
+}
+.modal-content{
+  background:#fff;
+  padding:26px;
+  border-radius:14px;
+  width:100%;
+  max-width:420px
+}
+.actions{display:flex;gap:12px;margin-top:20px}
+.actions button{
+  flex:1;
+  padding:12px;
+  border-radius:8px;
+  border:none;
+  font-weight:600;
+  cursor:pointer
+}
+.confirm{background:var(--primary);color:#fff}
+.cancel{background:#e5e7eb}
+.toast{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  padding:14px 18px;
+  border-radius:8px;
+  color:#fff;
+  opacity:0;
+  transform:translateY(20px);
+  transition:.3s;
+  z-index:1000
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{background:var(--success)}
+.toast.error{background:var(--error)}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">Cb SmartEarn</div>
+  <a href="dashboard.html" class="back">←home</a>
+  <a href="myplans.html" class="plans">purchased</a>
+</header>
+
+<main>
+  <h1>Investment Products</h1>
+
+  <div class="balance">
+    <span>Available Balance</span>
+    <h2 id="balance">₦loading...</h2>
+  </div>
+
+  <div class="grid" id="plans"></div>
+</main>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h3 id="modalTitle"></h3>
+    <p>Confirm purchase of investment plan.</p>
+    <div class="actions">
+      <button class="confirm" id="confirmBtn">Confirm</button>
+      <button class="cancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+  authDomain: "estateearn-1b31c.firebaseapp.com",
+  projectId: "estateearn-1b31c"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const localUser = JSON.parse(localStorage.getItem("smartestateUser"));
+if(!localUser) location.href="login.html";
+
+let currentUser, currentBalance = 0, selectedPlan;
+
+const plans = [
+  {name:"Nova Starter", expected:3600, hourly:21.5, duration:7, price:2000},
+  {name:"Alpha Boost", expected:5400, hourly:32.2, duration:7, price:3000},
+  {name:"Prime Yield", expected:8400, hourly:50, duration:7, price:5000},
+  {name:"Silver Vault", expected:17000, hourly:50, duration:14, price:10000},
+  {name:"Golden Rise", expected:22000, hourly:65.5, duration:14, price:15000},
+  {name:"Diamond Hold", expected:46800, hourly:65, duration:30, price:25000},
+  {name:"Platinum Max", expected:76000, hourly:225, duration:14, price:50000},
+  {name:"Elite Capital", expected:340000, hourly:472, duration:30, price:200000},
+  {name:"Royal Reserve", expected:920000, hourly:1277, duration:30, price:500000}
+];
+
+let userData = {};
+
+onAuthStateChanged(auth, async user=>{
+  if(!user) location.href="login.html";
+  currentUser = user;
+  const snap = await getDoc(doc(db,"users",user.uid));
+  if(!snap.exists()) location.href="login.html";
+
+  userData = snap.data();
+  currentBalance = userData.balance || 0;
+
+  document.getElementById("balance").textContent = `₦${currentBalance.toLocaleString()}`;
+});
+
+const grid = document.getElementById("plans");
+plans.forEach(p=>{
+  grid.innerHTML += `
+  <div class="plan">
+    <div>
+      <h3>${p.name}</h3>
+      <p>Expected: ₦${p.expected.toLocaleString()}</p>
+      <p>Hourly: ₦${p.hourly}</p>
+      <p>Duration: ${p.duration} Days</p>
+    </div>
+    <div>
+      <div class="price">₦${p.price.toLocaleString()}</div>
+      <button onclick="openModal('${p.name}')">Invest</button>
+    </div>
+  </div>`;
+});
+
+window.openModal = name=>{
+  selectedPlan = plans.find(p=>p.name===name);
+  document.getElementById("modalTitle").textContent = name;
+  document.getElementById("modal").style.display="flex";
+};
+
+window.closeModal = ()=>document.getElementById("modal").style.display="none";
+
+document.getElementById("confirmBtn").onclick = async ()=>{
+  if(currentBalance < selectedPlan.price){
+    showToast("Insufficient balance please deposit","error");
+    return;
+  }
+
+  const newBalance = currentBalance - selectedPlan.price;
+
+  // Update balance & increment investmentCount
+  await updateDoc(doc(db,"users",currentUser.uid),{
+    balance: newBalance,
+    investmentCount: increment(1),
+    lastClaimed: serverTimestamp()
+  });
+
+  // Add investment record
+  await addDoc(collection(db,"investments"),{
+    uid: currentUser.uid,
+    plan: selectedPlan.name,
+    amount: selectedPlan.price,
+    expected: selectedPlan.expected,
+    hourly: selectedPlan.hourly,
+    duration: selectedPlan.duration,
+    status: "active",
+    createdAt: serverTimestamp()
+  });
+
+  currentBalance = newBalance;
+  document.getElementById("balance").textContent = `₦${newBalance.toLocaleString()}`;
+  showToast("Purchased successfully","success");
+  closeModal();
+
+  // Update UI
+  userData.investmentCount = (userData.investmentCount || 0) + 1;
+  userData.lastClaimed = new Date().toLocaleString();
+  grid.innerHTML = "";
+  plans.forEach(p=>{
+    grid.innerHTML += `
+    <div class="plan">
+      <div>
+        <h3>${p.name}</h3>
+        <p>Expected: ₦${p.expected.toLocaleString()}</p>
+        <p>Hourly: ₦${p.hourly}</p>
+        <p>Duration: ${p.duration} Days</p>
+        <p>Last Claimed: ${userData.lastClaimed}</p>
+        <p>Investments Made: ${userData.investmentCount}</p>
+      </div>
+      <div>
+        <div class="price">₦${p.price.toLocaleString()}</div>
+        <button onclick="openModal('${p.name}')">Invest</button>
+      </div>
+    </div>`;
+  });
+};
+
+function showToast(msg,type){
+  const t=document.getElementById("toast");
+  t.textContent=msg;
+  t.className=`toast ${type} show`;
+  setTimeout(()=>t.classList.remove("show"),3000);
+}
+</script>
+
+</body>
+</html>

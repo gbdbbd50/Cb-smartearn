@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SmartEstate | Investment Progress</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --primary:#0f766e;
+  --secondary:#134e4a;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --success:#16a34a;
+  --error:#dc2626;
+}
+*{box-sizing:border-box;font-family:Inter,sans-serif}
+body{margin:0;background:var(--bg)}
+
+header{
+  background:#fff;
+  padding:16px 24px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.05)
+}
+.logo{font-size:22px;font-weight:700;color:var(--primary)}
+a.back{text-decoration:none;color:var(--primary);font-weight:600}
+
+main{
+  max-width:1100px;
+  margin:auto;
+  padding:28px
+}
+
+h1{margin-bottom:6px}
+.subtitle{color:var(--muted);margin-bottom:24px}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:22px;
+}
+
+.card{
+  background:var(--card);
+  padding:22px;
+  border-radius:16px;
+  box-shadow:0 16px 40px rgba(0,0,0,.06)
+}
+
+.card h3{margin:0 0 6px}
+.card p{margin:6px 0;font-size:14px;color:var(--muted)}
+
+.progress-wrap{
+  margin-top:16px
+}
+
+.progress-bar{
+  width:100%;
+  height:10px;
+  background:#e5e7eb;
+  border-radius:20px;
+  overflow:hidden
+}
+
+.progress{
+  height:100%;
+  background:linear-gradient(90deg,var(--primary),var(--secondary));
+  width:0%;
+  transition:width .6s ease
+}
+
+.progress-text{
+  display:flex;
+  justify-content:space-between;
+  font-size:13px;
+  margin-top:6px;
+  color:var(--muted)
+}
+
+.status{
+  margin-top:10px;
+  font-size:14px;
+  font-weight:600
+}
+.status.active{color:var(--success)}
+.status.expired{color:var(--error)}
+
+.toast{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  padding:14px 18px;
+  border-radius:8px;
+  color:#fff;
+  opacity:0;
+  transform:translateY(20px);
+  transition:.3s;
+  z-index:1000
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{background:var(--error)}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">SmartEstate</div>
+  <a href="dashboard.html" class="back">← Dashboard</a>
+</header>
+
+<main>
+  <h1>Investment Progress</h1>
+  <div class="subtitle">Track how far each investment has grown</div>
+
+  <div id="progressGrid" class="grid"></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+  authDomain: "estateearn-1b31c.firebaseapp.com",
+  projectId: "estateearn-1b31c"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const localUser = JSON.parse(localStorage.getItem("smartestateUser"));
+if(!localUser) location.href="login.html";
+
+const grid = document.getElementById("progressGrid");
+
+function toast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg;
+  t.className="toast error show";
+  setTimeout(()=>t.classList.remove("show"),3000);
+}
+
+onAuthStateChanged(auth, async user=>{
+  if(!user) location.href="login.html";
+
+  try{
+    const q = query(
+      collection(db,"investments"),
+      where("uid","==",user.uid)
+    );
+    const snap = await getDocs(q);
+
+    if(snap.empty){
+      grid.innerHTML="<p style='color:var(--muted)'>No investments found.</p>";
+      return;
+    }
+
+    snap.forEach(docSnap=>{
+      const inv = docSnap.data();
+
+      const expected = inv.expected || 0;
+      const claimed = inv.totalClaimed || 0;
+      const progress = expected > 0 ? Math.min(100, Math.round((claimed/expected)*100)) : 0;
+      const expired = claimed >= expected || inv.status === "expired";
+
+      grid.innerHTML += `
+        <div class="card">
+          <h3>${inv.plan}</h3>
+          <p>Invested: ₦${inv.amount.toLocaleString()}</p>
+          <p>Expected Return: ₦${expected.toLocaleString()}</p>
+          <p>Total Claimed: ₦${claimed.toLocaleString()}</p>
+
+          <div class="progress-wrap">
+            <div class="progress-bar">
+              <div class="progress" style="width:${progress}%"></div>
+            </div>
+            <div class="progress-text">
+              <span>${progress}% completed</span>
+              <span>₦${claimed.toLocaleString()} / ₦${expected.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div class="status ${expired ? "expired":"active"}">
+            ${expired ? "Expired":"Active"}
+          </div>
+        </div>
+      `;
+    });
+  }catch(err){
+    toast(err.message);
+  }
+});
+</script>
+
+</body>
+</html>

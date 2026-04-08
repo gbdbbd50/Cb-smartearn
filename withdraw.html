@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cb SmartEarn | Withdraw</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+ --primary:#0f766e;
+ --bg:#f1f5f9;
+ --card:#fff;
+ --muted:#64748b;
+ --danger:#dc2626;
+ --success:#16a34a;
+}
+*{box-sizing:border-box;font-family:Inter}
+body{margin:0;background:var(--bg)}
+
+header{
+ background:#fff;
+ padding:16px 24px;
+ display:flex;
+ justify-content:space-between;
+ box-shadow:0 4px 14px rgba(0,0,0,.05)
+}
+
+.logo{font-size:22px;font-weight:700;color:var(--primary)}
+a{text-decoration:none;color:var(--primary);font-weight:600}
+
+main{
+ max-width:850px;
+ margin:auto;
+ padding:28px
+}
+
+h1{margin-bottom:6px}
+.subtitle{color:var(--muted);margin-bottom:22px}
+
+.card{
+ background:var(--card);
+ padding:24px;
+ border-radius:16px;
+ box-shadow:0 16px 40px rgba(0,0,0,.06);
+ margin-bottom:24px
+}
+
+input,select{
+ width:100%;
+ padding:14px;
+ border-radius:10px;
+ border:1px solid #e5e7eb;
+ margin-bottom:14px;
+ font-size:15px
+}
+
+button{
+ width:100%;
+ padding:14px;
+ border:none;
+ border-radius:12px;
+ background:var(--primary);
+ color:#fff;
+ font-weight:600;
+ font-size:16px;
+ cursor:pointer
+}
+
+.bank{
+ padding:12px;
+ border:1px solid #e5e7eb;
+ border-radius:10px;
+ margin-bottom:10px;
+ cursor:pointer;
+ transition:.2s
+}
+.bank.active{border-color:var(--primary);background:#f0fdfa}
+
+.toast{
+ position:fixed;
+ bottom:20px;
+ right:20px;
+ padding:14px 18px;
+ border-radius:8px;
+ color:#fff;
+ opacity:0;
+ transform:translateY(20px);
+ transition:.3s
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{background:var(--danger)}
+.toast.success{background:var(--success)}
+</style>
+</head>
+
+<body>
+
+<header>
+ <div class="logo">Cb SmartEarn</div>
+ <a href="dashboard.html">← Dashboard</a>
+</header>
+
+<main>
+
+<h1>Withdraw Funds</h1>
+<p class="subtitle">Minimum withdrawal is ₦2,000</p>
+
+<!-- BANKS -->
+<div class="card">
+ <h3>Your Bank Accounts</h3>
+ <div id="banks"></div>
+
+ <h4>Add New Bank</h4>
+ <input id="bankName" placeholder="Bank Name">
+ <input id="accountName" placeholder="Account Name">
+ <input id="accountNumber" placeholder="Account Number">
+ <button onclick="addBank()">Add Bank</button>
+</div>
+
+<!-- WITHDRAW -->
+<div class="card">
+ <h3>Withdrawal Details</h3>
+ <input type="number" id="amount" placeholder="Enter amount">
+ <button onclick="withdraw()">Submit Withdrawal</button>
+</div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import {
+ getFirestore, collection, addDoc, query, where,
+ getDocs, doc, updateDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const app=initializeApp({
+ apiKey:"AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+ authDomain:"estateearn-1b31c.firebaseapp.com",
+ projectId:"estateearn-1b31c"
+});
+
+const auth=getAuth(app);
+const db=getFirestore(app);
+
+let user, userData, selectedBank=null;
+
+const toast=(msg,type)=>{
+ const x=document.getElementById("toast");
+ x.textContent=msg;
+ x.className=`toast ${type} show`;
+ setTimeout(()=>x.classList.remove("show"),3000);
+};
+
+// Load banks
+async function loadBanks(){
+ const snap=await getDocs(query(collection(db,"banks"),where("uid","==",user.uid)));
+ const box=document.getElementById("banks");
+ box.innerHTML="";
+ snap.forEach(d=>{
+  const b=d.data();
+  const div=document.createElement("div");
+  div.className="bank";
+  div.onclick=()=>{
+   document.querySelectorAll(".bank").forEach(x=>x.classList.remove("active"));
+   div.classList.add("active");
+   selectedBank={id:d.id,...b};
+  };
+  div.innerHTML=`<b>${b.bank}</b><br>${b.accountName} • ${b.accountNumber}`;
+  box.appendChild(div);
+ });
+}
+
+// Add Bank
+window.addBank=async()=>{
+ const bank=document.getElementById("bankName").value.trim();
+ const name=document.getElementById("accountName").value.trim();
+ const number=document.getElementById("accountNumber").value.trim();
+
+ if(!bank||!name||!number) return toast("Fill all bank fields","error");
+
+ try{
+  await addDoc(collection(db,"banks"),{
+   uid:user.uid,
+   bank,
+   accountName:name,
+   accountNumber:number,
+   createdAt:serverTimestamp()
+  });
+
+  toast("Bank added successfully","success");
+
+  // Clear inputs
+  document.getElementById("bankName").value="";
+  document.getElementById("accountName").value="";
+  document.getElementById("accountNumber").value="";
+
+  // Reload banks
+  setTimeout(()=>loadBanks(),500);
+
+ }catch(err){
+  console.error(err);
+  toast("Failed to add bank: "+err.message,"error");
+ }
+};
+
+// Withdraw
+window.withdraw=async()=>{
+ const amt=Number(document.getElementById("amount").value);
+ if(!selectedBank) return toast("Select a bank","error");
+ if(amt<2000) return toast("Minimum withdrawal is ₦2,000","error");
+ if(userData.balance<amt) return toast("Insufficient balance","error");
+
+ // Check investment and deposit counts
+ const inv=(await getDocs(query(collection(db,"investments"),where("uid","==",user.uid)))).size;
+ const dep=(await getDocs(query(collection(db,"deposits"),where("uid","==",user.uid)))).size;
+ if(inv<1||dep<1) return toast("You must have at least 1 investment and 1 deposit","error");
+
+ try{
+  // Add withdrawal request
+  await addDoc(collection(db,"withdrawals"),{
+   uid:user.uid,
+   amount:amt,
+   bank:selectedBank,
+   status:"pending",
+   createdAt:serverTimestamp()
+  });
+
+  // Deduct balance
+  await updateDoc(doc(db,"users",user.uid),{
+   balance:userData.balance-amt
+  });
+  userData.balance-=amt;
+
+  toast("Withdrawal submitted","success");
+ }catch(err){
+  console.error(err);
+  toast("Error submitting withdrawal: "+err.message,"error");
+ }
+};
+
+onAuthStateChanged(auth,async u=>{
+ if(!u) location.href="login.html";
+ user=u;
+ const snap=await getDocs(query(collection(db,"users"),where("uid","==",u.uid)));
+ if(snap.empty) return toast("User not found","error");
+ userData=snap.docs[0].data();
+ loadBanks();
+});
+</script>
+
+</body>
+</html>

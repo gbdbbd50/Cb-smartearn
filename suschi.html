@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin | Users</title>
+<style>
+body{font-family:Inter;background:#f1f5f9}
+.card{background:#fff;margin:20px;padding:18px;border-radius:14px}
+button{padding:8px;border:none;border-radius:8px;font-weight:600}
+</style>
+</head>
+<body>
+
+<h2 style="margin:20px">User Management</h2>
+<div id="users"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+const app=initializeApp({
+ apiKey:"AIzaSyBTJPnHAP3OGWDPbNHCHmrADSln8FyUxK4",
+ authDomain:"estateearn-1b31c.firebaseapp.com",
+ projectId:"estateearn-1b31c"
+});
+
+const db=getFirestore(app);
+const users=document.getElementById("users");
+
+async function load(){
+ const snap=await getDocs(collection(db,"users"));
+ users.innerHTML="";
+ snap.forEach(d=>{
+  const u=d.data();
+  users.innerHTML+=`
+   <div class="card">
+    <p>${u.username} (${u.email})</p>
+    <p>Status: ${u.suspended?"Suspended":"Active"}</p>
+    <button onclick="toggle('${d.id}',${!u.suspended})">
+      ${u.suspended?"Activate":"Suspend"}
+    </button>
+   </div>
+  `;
+ });
+}
+
+window.toggle=async(id,val)=>{
+ await updateDoc(doc(db,"users",id),{suspended:val});
+ load();
+};
+
+load();
+</script>
+</body>
+</html>
