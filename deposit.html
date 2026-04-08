@@ -6,10 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://js.paystack.co/v1/inline.js"></script>
 
 <style>
-/* KEEPING YOUR ORIGINAL STYLE */
 :root{
   --primary:#0f766e;
   --secondary:#134e4a;
@@ -36,6 +34,9 @@ header{
 a.back{text-decoration:none;color:var(--primary);font-weight:600}
 
 main{max-width:900px;margin:auto;padding:28px;}
+
+h1{margin-bottom:6px}
+.subtitle{color:var(--muted);margin-bottom:22px}
 
 .card{
   background:var(--card);
@@ -113,17 +114,17 @@ button{
 .toast.success{background:var(--success)}
 .toast.error{background:var(--error)}
 
-/* 🔥 FULL PAGE LOADER */
+/* FULL SCREEN LOADER */
 .loader{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,0.5);
+  background:rgba(0,0,0,0.6);
   display:flex;
   justify-content:center;
   align-items:center;
-  z-index:2000;
   color:#fff;
   font-size:18px;
+  z-index:2000;
   display:none;
 }
 .loader.show{display:flex}
@@ -159,7 +160,7 @@ button{
       <p>Under development</p>
     </div>
 
-    <!-- FIXED ONLINE -->
+    <!-- ONLINE FIXED -->
     <div class="method" data-method="online">
       <h3>Online Payment</h3>
       <p>Instant payment (Paystack)</p>
@@ -174,10 +175,10 @@ button{
   <div class="summary">
     <div><span>Deposit Amount</span><span id="base">₦0</span></div>
     <div><span>Bonus</span><span id="bonus">₦0</span></div>
-    <div style="font-weight:700"><span>Total</span><span id="total">₦0</span></div>
+    <div style="font-weight:700"><span>Total Credited</span><span id="total">₦0</span></div>
   </div>
 
-  <button id="proceedBtn">Proceed</button>
+  <button id="proceedBtn">Proceed to Payment</button>
 </div>
 
 </main>
@@ -217,7 +218,7 @@ const toast = (msg,type)=>{
   setTimeout(()=>t.classList.remove("show"),3000);
 };
 
-// Method selection
+// METHOD SELECT
 document.querySelectorAll(".method").forEach(m=>{
   if(m.classList.contains("disabled")) return;
   m.onclick=()=>{
@@ -228,7 +229,7 @@ document.querySelectorAll(".method").forEach(m=>{
   }
 });
 
-// KEEPING YOUR BONUS LOGIC
+// KEEP BONUS LOGIC
 function calculate(){
   const amt = Number(amountInput.value)||0;
   let bonus = 0;
@@ -244,36 +245,21 @@ function calculate(){
 
 amountInput.oninput = calculate;
 
-// MAIN ACTION
-proceedBtn.onclick = async()=>{
-  const amt = Number(amountInput.value);
-
-  if(!amt || amt < 2000){
-    toast("Minimum deposit is ₦2,000","error");
+// LOAD PAYSTACK PROPERLY
+function loadPaystack(callback){
+  if(window.PaystackPop){
+    callback();
     return;
   }
+  const script = document.createElement("script");
+  script.src = "https://js.paystack.co/v1/inline.js";
+  script.onload = callback;
+  document.body.appendChild(script);
+}
 
-  const user = auth.currentUser;
-
-  // MANUAL (UNCHANGED)
-  if(selectedMethod==="manual"){
-    await addDoc(collection(db,"deposits"),{
-      uid:user.uid,
-      amount:amt,
-      method:"manual",
-      bonus: Math.floor(amt*0.05),
-      status:"awaiting",
-      createdAt:serverTimestamp()
-    });
-
-    location.href="manualpayment.html";
-    return;
-  }
-
-  // 🔥 ONLINE PAYMENT
-  loader.classList.add("show");
-
-  PaystackPop.setup({
+// START PAYMENT
+function startPayment(user, amt){
+  const handler = PaystackPop.setup({
     key:"pk_live_e2bee25e1d29c785e92734435801bd495f5348f5",
     email:user.email,
     amount:amt*100,
@@ -314,21 +300,56 @@ proceedBtn.onclick = async()=>{
           }
         }
 
-        loader.classList.remove("show");
         toast("Deposit successful","success");
         setTimeout(()=>location.href="dashboard.html",1500);
 
       }catch(e){
-        loader.classList.remove("show");
-        toast("Error processing payment","error");
+        console.error(e);
+        toast("Error completing deposit","error");
       }
     },
 
-    onClose:()=>{
+    onClose(){
       loader.classList.remove("show");
       toast("Payment cancelled","error");
     }
-  }).openIframe();
+  });
+
+  loader.classList.remove("show");
+  handler.openIframe();
+}
+
+// MAIN CLICK
+proceedBtn.onclick = async()=>{
+  const amt = Number(amountInput.value);
+
+  if(!amt || amt < 2000){
+    toast("Minimum deposit is ₦2,000","error");
+    return;
+  }
+
+  const user = auth.currentUser;
+
+  // MANUAL (UNCHANGED)
+  if(selectedMethod==="manual"){
+    await addDoc(collection(db,"deposits"),{
+      uid:user.uid,
+      amount:amt,
+      method:"manual",
+      bonus: Math.floor(amt*0.05),
+      status:"awaiting",
+      createdAt:serverTimestamp()
+    });
+
+    location.href="manualpayment.html";
+    return;
+  }
+
+  loader.classList.add("show");
+
+  loadPaystack(()=>{
+    startPayment(user, amt);
+  });
 };
 
 // AUTH
